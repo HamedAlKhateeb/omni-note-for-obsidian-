@@ -133,6 +133,7 @@ class OmniNoteView extends ItemView {
 <div class="omni-card-hd">
   <span class="omni-card-ico">💡</span>
   <span class="omni-card-ttl">حكمة اليوم</span>
+  <button class="omni-ghost-btn" id="oq-pause" title="${this.S.isQuotePaused ? 'استئناف تغيير الحكم' : 'إيقاف تغيير الحكم'}">${this.S.isQuotePaused ? '▶️' : '⏸️'}</button>
   <button class="omni-ghost-btn" id="oq-next" title="حكمة أخرى">↻</button>
 </div>
 <p class="omni-q-text"   id="oq-text"   style="font-size: ${this.S.quoteFontSize || 16}px">"${escapeHTML(q.text)}"</p>
@@ -150,6 +151,14 @@ class OmniNoteView extends ItemView {
         };
         card.querySelector('#oq-font-inc').onclick = () => updateFont(+1);
         card.querySelector('#oq-font-dec').onclick = () => updateFont(-1);
+
+        const toggleBtn = card.querySelector('#oq-pause');
+        toggleBtn.onclick = async () => {
+            this.S.isQuotePaused = !this.S.isQuotePaused;
+            await this.plugin.saveSettings();
+            toggleBtn.textContent = this.S.isQuotePaused ? '▶️' : '⏸️';
+            toggleBtn.title = this.S.isQuotePaused ? 'استئناف تغيير الحكم' : 'إيقاف تغيير الحكم';
+        };
 
         card.querySelector('#oq-next').onclick = async () => {
             const nq = await this.plugin.advanceQuote();
@@ -783,6 +792,7 @@ class OmniNotePlugin extends Plugin {
         if (this._qTimer) clearInterval(this._qTimer);
         const ms = (this.settings.quoteInterval || 30) * 60 * 1000;
         this._qTimer = window.setInterval(async () => {
+            if (this.settings.isQuotePaused) return; // لا تغير الحكمة إذا كانت متوقفة
             const q = await this.advanceQuote();
             sendNotif('💡 حكمة اليوم — OmniNote', `"${escapeHTML(q.text)}" — ${escapeHTML(q.author)}`, true);
         }, ms);
