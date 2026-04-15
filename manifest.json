@@ -1,0 +1,10 @@
+{
+    "id": "omni-note-extension",
+    "name": "OmniNote Extension",
+    "version": "3.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "بومودورو + تقويم + متابعة الإنجاز + حكمة اليوم — شريط جانبي عربي متكامل لـ Obsidian",
+    "author": "OmniNote",
+    "authorUrl": "",
+    "isDesktopOnly": true
+}

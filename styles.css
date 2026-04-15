@@ -1,0 +1,573 @@
+/* ═══════════════════════════════════════════════════════
+   OmniNote v3 — Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Root ─────────────────────────────────────────────── */
+.omni-root {
+  overflow-y: auto;
+  height: 100%;
+  scrollbar-width: thin;
+}
+
+.omni-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 15px;
+  font-family: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
+  direction: rtl;
+}
+
+/* ── Card ─────────────────────────────────────────────── */
+.omni-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  padding: 13px 13px 11px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.07);
+  transition: box-shadow .18s;
+}
+.omni-card:hover {
+  box-shadow: 0 4px 18px rgba(0,0,0,.12);
+}
+
+/* ── Card header ──────────────────────────────────────── */
+.omni-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.omni-card-ico { font-size: 1em; }
+.omni-card-ttl {
+  flex: 1;
+  font-weight: 700;
+  font-size: .88em;
+  color: var(--text-accent);
+  letter-spacing: .02em;
+}
+
+/* ── Ghost button ─────────────────────────────────────── */
+.omni-ghost-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1em;
+  padding: 2px 5px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: background .14s, color .14s;
+}
+.omni-ghost-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* ── Generic buttons ──────────────────────────────────── */
+.omni-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: .8em;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity .14s, filter .14s;
+  white-space: nowrap;
+}
+.omni-btn:hover  { filter: brightness(1.1);  }
+.omni-btn:active { filter: brightness(.92); }
+
+.omni-btn-accent {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.omni-btn-muted {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+.omni-btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* ── Stepper ──────────────────────────────────────────── */
+.omni-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.omni-step-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  border-radius: 5px;
+  font-size: .9em;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background .12s;
+}
+.omni-step-btn:hover { background: var(--background-modifier-hover); }
+.omni-step-accent {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+.omni-step-accent:hover { filter: brightness(1.1); }
+
+/* ── Text field ───────────────────────────────────────── */
+.omni-field {
+  width: 100%;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: .83em;
+  direction: rtl;
+  text-align: right;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color .14s;
+}
+.omni-field:focus { border-color: var(--interactive-accent); }
+.omni-field-sm { width: 100%; flex: 1; min-width: 0; }
+
+
+/* ═══════════════════════════
+   QUOTE CARD
+   ═══════════════════════════ */
+.omni-q-text {
+  font-size: .88em;
+  font-style: italic;
+  color: var(--text-normal);
+  line-height: 1.65;
+  margin: 0 0 5px;
+  text-align: right;
+}
+.omni-q-author {
+  font-size: .76em;
+  color: var(--text-muted);
+  text-align: left;
+  margin: 0;
+  direction: ltr;
+}
+
+
+/* ═══════════════════════════
+   POMODORO CARD
+   ═══════════════════════════ */
+.omni-mode-badge {
+  font-size: .7em;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+/* .omni-mode-badge.omni-break { background: #1a3a5f; } */
+
+.omni-timer {
+  font-size: 2.7em;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text-normal);
+  letter-spacing: .06em;
+  margin: 8px 0 11px;
+  font-variant-numeric: tabular-nums;
+  font-family: "JetBrains Mono","Courier New",monospace;
+}
+
+.omni-pomo-btns {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.omni-dur-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.omni-dur-lbl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .78em;
+  color: var(--text-muted);
+}
+.omni-dur-inp {
+  width: 40px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: .85em;
+  text-align: center;
+  font-family: inherit;
+}
+
+.omni-sessions-row {
+  text-align: center;
+  margin-top: 8px;
+  font-size: .79em;
+  color: var(--text-muted);
+}
+.omni-sessions-row strong { color: var(--text-accent); }
+
+.omni-note-row {
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: .76em;
+  color: var(--text-muted);
+  text-align: center;
+  justify-content: center;
+}
+.omni-note-chip {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: .95em;
+  font-weight: 600;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+
+/* ═══════════════════════════
+   CALENDAR CARD
+   ═══════════════════════════ */
+.omni-cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.omni-month-lbl {
+  font-size: .88em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+/* Grid 7 columns */
+.omni-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  direction: rtl;
+}
+
+/* Day name headers */
+.omni-dn {
+  text-align: center;
+  font-size: .64em;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 3px 0 5px;
+  letter-spacing: .02em;
+}
+
+/* Date cells */
+.omni-dc {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: .78em;
+  color: var(--text-normal);
+  transition: background .12s;
+  user-select: none;
+}
+.omni-dc:hover { background: var(--background-modifier-hover); }
+.omni-dc-empty { pointer-events: none; }
+
+.omni-dc.omni-today {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 800;
+  border-radius: 50%;
+}
+.omni-dc.omni-today:hover { filter: brightness(1.08); }
+
+.omni-dc.omni-selected {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+  border-radius: 50%;
+}
+
+/* Note/task indicator dot */
+.omni-dc.omni-has-note::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-normal);
+  pointer-events: none;
+}
+.omni-dc.omni-today.omni-has-note::after { background: var(--text-on-accent); }
+
+/* Task count badge on date cell */
+.omni-task-badge {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  font-size: .58em;
+  font-weight: 700;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 6px;
+  padding: 0 3px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.omni-today .omni-task-badge {
+  background: var(--text-on-accent);
+  color: var(--interactive-accent);
+}
+
+/* ── Sticky panel ─────────────────────────────────────── */
+.omni-sticky-panel {
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
+  padding: 10px;
+  background: var(--background-primary-alt, var(--background-primary));
+  border-radius: 9px;
+  border: 1px solid var(--background-modifier-border);
+  animation: omni-drop .16s ease;
+}
+@keyframes omni-drop {
+  from { opacity:0; transform:translateY(-5px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.omni-sticky-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.omni-sticky-date {
+  font-size: .77em;
+  font-weight: 700;
+  color: var(--text-accent);
+}
+
+.omni-sticky-ta {
+  width: 100%;
+  min-height: 58px;
+  padding: 7px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: .82em;
+  resize: vertical;
+  direction: rtl;
+  text-align: right;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color .14s;
+}
+.omni-sticky-ta:focus { border-color: var(--interactive-accent); }
+
+/* ── Task list inside sticky ─────────────────────────── */
+.omni-task-list { display: flex; flex-direction: column; gap: 4px; }
+.omni-ctask-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  font-size: .8em;
+  animation: omni-drop .14s ease;
+}
+.omni-ctask-time {
+  color: var(--text-accent);
+  font-weight: 700;
+  font-size: .9em;
+  min-width: 34px;
+  direction: ltr;
+}
+.omni-ctask-text { flex: 1; color: var(--text-normal); }
+.omni-ctask-del  { font-size: .82em; padding: 1px 4px; }
+
+/* ── Add task row ────────────────────────────────────── */
+.omni-task-add-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.omni-task-inp  { flex: 1; }
+.omni-time-inp  { width: 80px; flex: none; }
+.omni-add-task-btn { padding: 5px 10px; font-size: 1em; }
+
+.omni-sticky-save-btn { align-self: flex-start; font-size: .79em; }
+
+
+/* ═══════════════════════════
+   PROGRESS TRACKER CARD
+   ═══════════════════════════ */
+
+/* ── Creation form ───────────────────────────────────── */
+.omni-prog-form {
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 9px;
+  background: var(--background-primary-alt, var(--background-primary));
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  animation: omni-drop .16s ease;
+}
+.omni-prog-form-row {
+  display: flex;
+  gap: 6px;
+}
+.omni-prog-form-btns {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Task list ───────────────────────────────────────── */
+.omni-prog-list { display: flex; flex-direction: column; gap: 7px; }
+
+.omni-prog-empty {
+  font-size: .8em;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 10px 0 4px;
+}
+
+.omni-prog-sep {
+  font-size: .72em;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0 2px;
+  letter-spacing: .04em;
+}
+
+.omni-prog-item {
+  background: var(--background-primary-alt, var(--background-primary));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 4px;
+  animation: omni-drop .16s ease;
+  display: flex;
+  flex-direction: column;
+}
+.omni-prog-done {
+  opacity: .65;
+}
+
+.omni-prog-item-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+.omni-prog-name-lbl {
+  font-size: .88em;
+  font-weight: 700;
+  color: var(--text-normal);
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.omni-prog-units {
+  font-size: .73em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Progress bar */
+.omni-prog-bar-wrap {
+  height: 5px;
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.omni-prog-bar {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 4px;
+  transition: width .3s ease;
+  min-width: 3px;
+}
+.omni-prog-done .omni-prog-bar { background: #27ae60; }
+
+/* Footer row */
+.omni-prog-item-ft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.omni-prog-stepper { gap: 4px; }
+.omni-prog-pct {
+  font-size: .78em;
+  font-weight: 700;
+  color: var(--text-accent);
+  min-width: 32px;
+  text-align: center;
+}
+.omni-pct-done { color: #27ae60; font-size: .77em; }
+.omni-prog-side-btns {
+  display: flex;
+  gap: 2px;
+}
+.omni-prog-complete-btn { color: #27ae60; font-weight: 700; }
+.omni-prog-del-btn      { font-size: .85em; }
+
+
+/* ═══════════════════════════
+   SETTINGS PAGE
+   ═══════════════════════════ */
+.omni-settings-note {
+  font-size: .83em;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: 7px;
+  padding: 9px 11px;
+  line-height: 1.7;
+  margin: 6px 0 12px;
+  border: 1px solid var(--background-modifier-border);
+}
+.omni-settings-note code {
+  background: var(--background-primary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: .9em;
+}
