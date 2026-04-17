@@ -1,5 +1,5 @@
 'use strict';
-const { Plugin, ItemView, PluginSettingTab, Setting, Notice } = require('obsidian');
+const { Plugin, ItemView, PluginSettingTab, Setting, Notice, Modal } = require('obsidian');
 
 // ═══════════════════════════════════════════════════════════
 //  ثوابت
@@ -18,11 +18,15 @@ const DEFAULT_SETTINGS = {
     quoteInterval   : 30,
     quoteFontSize   : 16,
     currentQuoteIdx : 0,
-    quotes          : [
-        { text: 'إن العلم في الصغر كالنقش في الحجر.', author: 'مثل عربي' },
-        { text: 'The only way to do great work is to love what you do.', author: 'Steve Jobs' },
-        { text: "Life is what happens when you're busy making other plans.", author: 'John Lennon' },
-    ],
+    enableMilestoneNotifications : true,
+    milestoneNotificationType: 'windows',
+    milestoneMessages: {
+        25: "ومن يتهيب صعود الجبال — يعش أبد الدهر بين الحفر",
+        50: "وما نيل المطالب بالتمني ـــ ولكن تُؤخذ الدنيا غِلابا\nوما استعصى على قومٍ منالٌ ـــ إذا الإقدام كان لهم ركابا",
+        75: "إذا غامرت في شرفٍ مرومِ — فلا تقنع بما دون النجوم",
+       100: "ولم أرَ في عيوب الناس شيئًا — كنقص القادرين على التمام",
+    },
+    quotes          : [],
     stickyNotes    : {},
     calendarTasks  : {},
     progressTasks  : [],
@@ -38,6 +42,26 @@ const fmtDate  = d  => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDat
 const fmtTime  = s  => `${pad(Math.max(0, Math.floor(s/60)))}:${pad(Math.max(0, s%60))}`;
 const escapeHTML = str => String(str).replace(/[&<>'"]/g, tag =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[tag] || tag));
+
+/** تحويل وقت HH:MM (24h) إلى نظام 12 ساعة مع AM/PM */
+function fmt12(time) {
+    if (!time) return '';
+    const [hStr, mStr] = time.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    const period = h >= 12 ? 'م' : 'ص';
+    h = h % 12 || 12;
+    return `${h}:${m} ${period}`;
+}
+
+/** حساب الخطوة الذكية بناءً على إعداد المهمة أو الإجمالي */
+function getStep(task) {
+    if (task.config && task.config.step) return task.config.step;
+    const total = (task.config && task.config.total) || task.total || 1;
+    if (total <= 20)  return 1;
+    if (total <= 100) return 5;
+    return Math.max(1, Math.round(total / 50)); // ≈ 2%
+}
 
 function buildCSV(quotes) {
     return quotes.map(q => {
@@ -79,6 +103,43 @@ function sendNotif(title, body, hideAppNotice = false) {
             });
         }
     } catch (_) {}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  موديال إدخال يدوي (بديل prompt)
+// ═══════════════════════════════════════════════════════════
+class OmniInputModal extends Modal {
+    constructor(app, title, label, defaultVal, onSubmit) {
+        super(app);
+        this._title = title;
+        this._label = label;
+        this._default = defaultVal || '';
+        this._onSubmit = onSubmit;
+    }
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.setAttribute('dir', 'rtl');
+        contentEl.createEl('h3', { text: this._title }).style.cssText = 'margin:0 0 10px;color:var(--text-accent);';
+        contentEl.createEl('p', { text: this._label }).style.cssText = 'margin:0 0 8px;font-size:0.9em;color:var(--text-muted);';
+        const inp = contentEl.createEl('input', { type: 'number' });
+        inp.value = this._default;
+        inp.style.cssText = 'width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);font-size:1em;direction:ltr;text-align:center;box-sizing:border-box;outline:none;';
+        inp.focus();
+        inp.select();
+        const btns = contentEl.createDiv();
+        btns.style.cssText = 'display:flex;gap:8px;margin-top:12px;justify-content:flex-end;';
+        const ok = btns.createEl('button', { text: '✓ تأكيد' });
+        ok.classList.add('mod-cta');
+        ok.style.cssText = 'padding:6px 18px;cursor:pointer;';
+        const cancel = btns.createEl('button', { text: 'إلغاء' });
+        cancel.style.cssText = 'padding:6px 18px;cursor:pointer;';
+        const submit = () => { this._onSubmit(inp.value); this.close(); };
+        ok.onclick = submit;
+        cancel.onclick = () => this.close();
+        inp.onkeydown = (e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') this.close(); };
+    }
+    onClose() { this.contentEl.empty(); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -188,35 +249,37 @@ class OmniNoteView extends ItemView {
   <span class="omni-mode-badge" id="op-badge">عمل</span>
 </div>
 <div class="omni-timer" id="op-timer">${fmtTime(this.timeRem)}</div>
-<div class="omni-pomo-btns">
-  <button class="omni-btn omni-btn-accent" id="op-start">▶ ابدأ</button>
-  <button class="omni-btn omni-btn-muted"  id="op-pause">⏸ توقف</button>
-  <button class="omni-btn omni-btn-ghost"  id="op-reset">↺ إعادة</button>
-  <button class="omni-btn omni-btn-ghost"  id="op-skip">⏭ تخطي</button>
-</div>
-<div class="omni-dur-row">
-  <div class="omni-dur-lbl">
-    <span>عمل</span>
-    <div class="omni-stepper">
-      <button class="omni-step-btn" id="op-wd">−</button>
-      <input  class="omni-dur-inp" type="number" id="op-wi"
-              value="${this.S.workDuration}" min="1" max="120">
-      <button class="omni-step-btn" id="op-wi2">+</button>
-    </div>
-    <span>دقيقة</span>
+<div class="omni-pomo-center">
+  <div class="omni-pomo-btns">
+    <button class="omni-btn omni-btn-accent" id="op-start">▶ ابدأ</button>
+    <button class="omni-btn omni-btn-muted"  id="op-pause">⏸ توقف</button>
+    <button class="omni-btn omni-btn-ghost"  id="op-reset">↺ إعادة</button>
+    <button class="omni-btn omni-btn-ghost"  id="op-skip">⏭ تخطي</button>
   </div>
-  <div class="omni-dur-lbl">
-    <span>استراحة</span>
-    <div class="omni-stepper">
-      <button class="omni-step-btn" id="op-bd">−</button>
-      <input  class="omni-dur-inp" type="number" id="op-bi"
-              value="${this.S.shortBreak}" min="1" max="60">
-      <button class="omni-step-btn" id="op-bi2">+</button>
+  <div class="omni-dur-row">
+    <div class="omni-dur-lbl">
+      <span>عمل</span>
+      <div class="omni-stepper">
+        <button class="omni-step-btn" id="op-wd">−</button>
+        <input  class="omni-dur-inp" type="number" id="op-wi"
+                value="${this.S.workDuration}" min="1" max="120">
+        <button class="omni-step-btn" id="op-wi2">+</button>
+      </div>
+      <span>دقيقة</span>
     </div>
-    <span>دقيقة</span>
+    <div class="omni-dur-lbl">
+      <span>استراحة</span>
+      <div class="omni-stepper">
+        <button class="omni-step-btn" id="op-bd">−</button>
+        <input  class="omni-dur-inp" type="number" id="op-bi"
+                value="${this.S.shortBreak}" min="1" max="60">
+        <button class="omni-step-btn" id="op-bi2">+</button>
+      </div>
+      <span>دقيقة</span>
+    </div>
   </div>
+  <div class="omni-sessions-row">🔥 جلسات مكتملة: <strong id="op-sessions">0</strong></div>
 </div>
-<div class="omni-sessions-row">🔥 جلسات مكتملة: <strong id="op-sessions">0</strong></div>
 <div class="omni-note-row" id="op-note-row" style="display:none">
   📝 جلسة على: <span id="op-note-name" class="omni-note-chip"></span>
 </div>`;
@@ -266,6 +329,20 @@ class OmniNoteView extends ItemView {
                     date: fmtDate(new Date()), note: this._activeNote || '—',
                     duration: this.S.workDuration, type: 'work',
                 });
+                // ربط البومودورو بمهمة time تلقائياً
+                const activeTask = this.S.progressTasks.find(t => !t.meta?.completed);
+                if (activeTask && activeTask.type === 'time') {
+                    activeTask.progress.current = Math.min(
+                        activeTask.config.total,
+                        (activeTask.progress.current || 0) + this.S.workDuration
+                    );
+                    if (activeTask.progress.current >= activeTask.config.total) {
+                        activeTask.meta.completed = true;
+                    }
+                    this.plugin._checkMilestones(activeTask);
+                    await this.plugin.saveSettings();
+                    if (this.plugin._activeView) this.plugin._activeView._rebuildProgress();
+                }
                 this.isBreak = true;
                 this.timeRem = this.S.shortBreak * 60;
                 badge.textContent = 'استراحة';
@@ -358,6 +435,7 @@ class OmniNoteView extends ItemView {
             if (txt) this.S.stickyNotes[this.selDate] = txt;
             else     delete this.S.stickyNotes[this.selDate];
             await this.plugin.saveSettings();
+            this._drawGrid(card);
             new Notice('تم الحفظ ✓');
         };
         card.querySelector('#oc-task-add').onclick    = () => this._addTask(card);
@@ -383,10 +461,30 @@ class OmniNoteView extends ItemView {
             if (ds === this.selDate) el.classList.add('omni-selected');
             const hasNote = !!this.S.stickyNotes[ds];
             const taskCnt = (this.S.calendarTasks[ds] || []).length;
-            if (hasNote || taskCnt) el.classList.add('omni-has-note');
+            
             el.createSpan('omni-dc-num').textContent = d;
-            if (taskCnt) { el.createSpan('omni-task-badge').textContent = taskCnt; }
-            el.onclick = () => this._openDay(card, ds);
+            
+            // توزيع النقاط أسفل رقم اليوم بناءً على المهام
+            let dotsCount = taskCnt > 0 ? taskCnt : (hasNote ? 1 : 0);
+            if (dotsCount > 0) {
+                const dotsWrap = el.createDiv('omni-dots-wrap');
+                const maxDots = Math.min(dotsCount, 5); // حد أقصى بصري حتى لا تخرج عن الدائرة
+                for (let k = 0; k < maxDots; k++) dotsWrap.createSpan('omni-dc-dot');
+            }
+            // ضغطة واحدة: تمييز بصري فقط مع تأخير لتفادي تداخل الدبل كليك
+            let clickTimer = null;
+            el.onclick = () => {
+                if (clickTimer) clearTimeout(clickTimer);
+                clickTimer = setTimeout(() => {
+                    grid.querySelectorAll('.omni-dc-peek').forEach(c => c.classList.remove('omni-dc-peek'));
+                    el.classList.add('omni-dc-peek');
+                }, 200);
+            };
+            // ضغطتان: فتح اللوح
+            el.ondblclick = () => {
+                if (clickTimer) clearTimeout(clickTimer);
+                this._openDay(card, ds);
+            };
         }
     }
 
@@ -409,8 +507,9 @@ class OmniNoteView extends ItemView {
         if (!tasks.length) return;
         tasks.forEach(t => {
             const row = list.createDiv('omni-ctask-row');
+            const timeDisplay = fmt12(t.time);
             row.innerHTML = `
-<span class="omni-ctask-time">${escapeHTML(t.time||'')}</span>
+<span class="omni-ctask-time">${escapeHTML(timeDisplay)}</span>
 <span class="omni-ctask-text">${escapeHTML(t.text)}</span>
 <button class="omni-ghost-btn omni-ctask-del" data-id="${t.id}" title="حذف">🗑</button>`;
             row.querySelector('.omni-ctask-del').onclick = async () => {
@@ -439,6 +538,7 @@ class OmniNoteView extends ItemView {
     // ─────────────────────────────────────────
     _buildProgress(wrap) {
         const card = wrap.createDiv('omni-card omni-prog-card');
+        this._progressCard = card;
         card.innerHTML = `
 <div class="omni-card-hd">
   <span class="omni-card-ico">📊</span>
@@ -446,10 +546,20 @@ class OmniNoteView extends ItemView {
   <button class="omni-ghost-btn" id="opr-add-btn" title="إضافة مهمة">+</button>
 </div>
 <div class="omni-prog-form" id="opr-form" style="display:none">
-  <input type="text"   class="omni-field" id="opr-name"  placeholder="اسم المهمة">
+  <input type="text" class="omni-field" id="opr-name" placeholder="اسم المهمة">
   <div class="omni-prog-form-row">
-    <input type="number" class="omni-field omni-field-sm" id="opr-total" placeholder="الوحدات" min="1" value="">
-    <input type="text"   class="omni-field omni-field-sm" id="opr-unit"  placeholder="وحدة">
+    <select class="omni-field omni-field-sm" id="opr-type">
+      <option value="steps">🎯 خطوات</option>
+      <option value="value">📖 قيمة</option>
+      <option value="time">⏱️ وقت</option>
+    </select>
+  </div>
+  <div class="omni-prog-form-row">
+    <input type="number" class="omni-field omni-field-sm" id="opr-total" placeholder="الهدف" min="1" value="">
+    <input type="text"   class="omni-field omni-field-sm" id="opr-unit"  placeholder="وحدة القياس">
+  </div>
+  <div class="omni-prog-form-row">
+    <input type="number" class="omni-field omni-field-sm" id="opr-step" placeholder="مقدار الزيادة (اختياري)" min="1" value="">
   </div>
   <div class="omni-prog-form-btns">
     <button class="omni-btn omni-btn-accent" id="opr-submit">إضافة ✓</button>
@@ -464,16 +574,44 @@ class OmniNoteView extends ItemView {
             if (f.style.display === 'flex') card.querySelector('#opr-name').focus();
         };
         card.querySelector('#opr-cancel').onclick = () => { card.querySelector('#opr-form').style.display='none'; };
+
+        // تحديث placeholder الوحدة حسب النوع
+        card.querySelector('#opr-type').onchange = (e) => {
+            const unitInp = card.querySelector('#opr-unit');
+            const stepInp = card.querySelector('#opr-step');
+            if (e.target.value === 'time') {
+                unitInp.placeholder = 'دقيقة';
+                stepInp.placeholder = 'مقدار الزيادة (مثلاً 25)';
+            } else if (e.target.value === 'value') {
+                unitInp.placeholder = 'صفحة / كلمة';
+                stepInp.placeholder = 'مقدار الزيادة (اختياري)';
+            } else {
+                unitInp.placeholder = 'وحدة القياس';
+                stepInp.placeholder = 'مقدار الزيادة (اختياري)';
+            }
+        };
+
         card.querySelector('#opr-submit').onclick = async () => {
             const name  = card.querySelector('#opr-name').value.trim();
+            const type  = card.querySelector('#opr-type').value;
             const total = parseInt(card.querySelector('#opr-total').value) || 1;
-            const unit  = card.querySelector('#opr-unit').value.trim() || 'وحدة';
+            const unit  = card.querySelector('#opr-unit').value.trim() || (type==='time' ? 'دقيقة' : 'وحدة');
+            const stepV = parseInt(card.querySelector('#opr-step').value);
             if (!name) { new Notice('أدخل اسم المهمة'); return; }
-            if (total<1) { new Notice('عدد الوحدات يجب أن يكون أكبر من صفر'); return; }
-            this.S.progressTasks.push({ id:uid(), name, total, unit, done:0, completed:false, createdAt:fmtDate(new Date()) });
+            if (total < 1) { new Notice('الهدف يجب أن يكون أكبر من صفر'); return; }
+            const newTask = {
+                id: uid(),
+                name,
+                type,
+                config: { total, unit, ...(stepV > 0 ? { step: stepV } : {}) },
+                progress: { current: 0, history: [] },
+                meta: { completed: false, archived: false, createdAt: fmtDate(new Date()), completedAt: null, milestones: {} },
+            };
+            this.S.progressTasks.push(newTask);
             card.querySelector('#opr-name').value  = '';
             card.querySelector('#opr-total').value = '';
             card.querySelector('#opr-unit').value  = '';
+            card.querySelector('#opr-step').value  = '';
             card.querySelector('#opr-form').style.display = 'none';
             await this.plugin.saveSettings();
             await this.plugin.writeProgressFile();
@@ -482,22 +620,34 @@ class OmniNoteView extends ItemView {
         this._drawProgress(card);
     }
 
+    /** يُستدعى من البومودورو لإعادة رسم بطاقة الإنجاز */
+    _rebuildProgress() {
+        if (this._progressCard) this._drawProgress(this._progressCard);
+    }
+
     _drawProgress(card) {
-        const list      = card.querySelector('#opr-list');
-        list.innerHTML  = '';
-        const active    = this.S.progressTasks.filter(t => !t.completed && !t.archived);
-        const completed = this.S.progressTasks.filter(t =>  t.completed && !t.archived);
+        const list     = card.querySelector('#opr-list');
+        list.innerHTML = '';
+        const active    = this.S.progressTasks.filter(t => !t.meta?.completed && !t.meta?.archived);
+        const completed = this.S.progressTasks.filter(t =>  t.meta?.completed && !t.meta?.archived);
         if (!active.length && !completed.length) {
             list.createDiv('omni-prog-empty').textContent = 'لا توجد مهام بعد';
             return;
         }
+
+        const typeLabels = { steps: '🎯', value: '📖', time: '⏱️' };
+
         const renderItem = (task, isDone) => {
-            const pct  = Math.min(100, Math.round((task.done / Math.max(task.total,1))*100));
-            const item = list.createDiv(`omni-prog-item${isDone ? ' omni-prog-done' : ''}`);
+            const current = task.progress?.current ?? 0;
+            const total   = task.config?.total ?? 1;
+            const unit    = task.config?.unit ?? 'وحدة';
+            const pct     = Math.min(100, Math.round((current / Math.max(total, 1)) * 100));
+            const typeLbl = typeLabels[task.type] || '📊';
+            const item    = list.createDiv(`omni-prog-item${isDone ? ' omni-prog-done' : ''}`);
             item.innerHTML = `
 <div class="omni-prog-item-hd">
-  <span class="omni-prog-name-lbl">${escapeHTML(task.name)}</span>
-  <span class="omni-prog-units">${escapeHTML(String(task.done))}/${escapeHTML(String(task.total))} ${escapeHTML(task.unit)}</span>
+  <span class="omni-prog-name-lbl">${typeLbl} ${escapeHTML(task.name)}</span>
+  <span class="omni-prog-units">${escapeHTML(String(current))}/${escapeHTML(String(total))} ${escapeHTML(unit)}</span>
 </div>
 <div class="omni-prog-bar-wrap">
   <div class="omni-prog-bar" style="width:${pct}%"></div>
@@ -510,6 +660,7 @@ class OmniNoteView extends ItemView {
     <button class="omni-step-btn omni-step-accent" data-id="${task.id}" data-a="inc">+</button>
   </div>
   <div class="omni-prog-side-btns">
+    <button class="omni-ghost-btn" data-id="${task.id}" data-a="set" title="إدخال يدوي">✏️</button>
     <button class="omni-ghost-btn" data-id="${task.id}" data-a="done" title="اكتمل">✓</button>
     <button class="omni-ghost-btn" data-id="${task.id}" data-a="del"  title="حذف">🗑</button>
   </div>` : `
@@ -519,19 +670,56 @@ class OmniNoteView extends ItemView {
             item.querySelectorAll('[data-a]').forEach(btn => {
                 btn.onclick = async () => {
                     const { id, a } = btn.dataset;
-                    const t = this.S.progressTasks.find(x => x.id===id);
+                    const t = this.S.progressTasks.find(x => x.id === id);
                     if (!t) return;
-                    const step = parseFloat(t.unit) || 1;
-                    if (a==='inc')  t.done = Math.min(t.total, t.done+step);
-                    if (a==='dec')  t.done = Math.max(0, t.done-step);
-                    if (a==='done') { t.completed=true; t.done=t.total; sendNotif('OmniNote 🎉',`تم إكمال المهمة: ${t.name}`); }
-                    if (a==='del')  { t.archived=true; t.archivedDate=fmtDate(new Date()); }
+                    const step = getStep(t);
+                    if (a === 'inc') {
+                        t.progress.current = Math.min(t.config.total, t.progress.current + step);
+                        this.plugin._checkMilestones(t);
+                        if (t.progress.current >= t.config.total) {
+                            t.meta.completed = true;
+                            t.meta.completedAt = fmtDate(new Date());
+                        }
+                    }
+                    if (a === 'dec') {
+                        t.progress.current = Math.max(0, t.progress.current - step);
+                    }
+                    if (a === 'set') {
+                        const unit = t.config?.unit ?? 'وحدة';
+                        const modal = new OmniInputModal(this.app, `إدخال يدوي — ${t.name}`, `أدخل التقدم الحالي (${unit}):`, String(t.progress.current), async (val) => {
+                            const num = parseFloat(val);
+                            if (!isNaN(num)) {
+                                t.progress.current = Math.max(0, Math.min(t.config.total, num));
+                                this.plugin._checkMilestones(t);
+                                if (t.progress.current >= t.config.total) {
+                                    t.meta.completed = true;
+                                    t.meta.completedAt = fmtDate(new Date());
+                                }
+                                await this.plugin.saveSettings();
+                                await this.plugin.writeProgressFile();
+                                this._drawProgress(card);
+                            }
+                        });
+                        modal.open();
+                        return; // skip the save/draw below, modal handles it
+                    }
+                    if (a === 'done') {
+                        t.meta.completed = true;
+                        t.meta.completedAt = fmtDate(new Date());
+                        t.progress.current = t.config.total;
+                        this.plugin._checkMilestones(t);
+                    }
+                    if (a === 'del') {
+                        t.meta.archived = true;
+                        t.meta.archivedDate = fmtDate(new Date());
+                    }
                     await this.plugin.saveSettings();
                     await this.plugin.writeProgressFile();
                     this._drawProgress(card);
                 };
             });
         };
+
         active.forEach(t => renderItem(t, false));
         if (completed.length) {
             list.createDiv('omni-prog-sep').textContent = '— مكتملة —';
@@ -652,6 +840,7 @@ class OmniSettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             qTextInp.value = ''; qAuthInp.value = '';
             new Notice('✅ تمت إضافة الحكمة');
+            if (this.plugin._activeView) this.plugin._activeView.updateQuoteDisplay(this.plugin.getCurrentQuote());
             this.display();
         };
 
@@ -661,21 +850,23 @@ class OmniSettingsTab extends PluginSettingTab {
         this._section(el, '📋 قائمة الحكم الحالية');
 
         if (!qs.length) {
-            el.createDiv('omni-settings-note').textContent = 'لا توجد حكم محفوظة بعد.';
+            el.createDiv('omni-settings-note').textContent = 'لا توجد حكم محفوظة بعد. أضف حكماً يدوياً أو استورد من CSV.';
         } else {
             const tableWrap = el.createDiv();
-            tableWrap.style.cssText = 'max-height:280px;overflow-y:auto;border:1px solid var(--background-modifier-border);border-radius:8px;margin-top:8px;';
+            tableWrap.style.cssText = 'max-height:320px;overflow-y:auto;border:1px solid var(--background-modifier-border);border-radius:8px;margin-top:8px;';
             const table = tableWrap.createEl('table');
             table.style.cssText = 'width:100%;border-collapse:collapse;font-size:0.85em;';
             const hr = table.createEl('thead').createEl('tr');
             hr.style.background = 'var(--background-secondary-alt)';
-            ['#','الحكمة','المؤلف','حذف'].forEach(h => {
+            ['#','الحكمة','المؤلف','إجراءات'].forEach(h => {
                 const th = hr.createEl('th', { text:h });
                 th.style.cssText = 'padding:8px 10px;text-align:right;';
             });
             const tbody = table.createEl('tbody');
             qs.forEach((q, idx) => {
                 const isCurrent = idx === (this.plugin.settings.currentQuoteIdx % Math.max(qs.length,1));
+
+                // ── الصف الرئيسي ──
                 const row = tbody.createEl('tr');
                 row.style.borderTop = '1px solid var(--background-modifier-border)';
                 if (isCurrent) row.style.background = 'var(--background-secondary)';
@@ -684,27 +875,129 @@ class OmniSettingsTab extends PluginSettingTab {
                 numTd.style.cssText = `padding:8px 10px;white-space:nowrap;color:${isCurrent ? 'var(--interactive-accent)' : 'var(--text-muted)'};`;
 
                 const txtTd = row.createEl('td', { text:q.text });
-                txtTd.style.cssText = 'padding:8px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                txtTd.style.cssText = 'padding:8px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
                 const authTd = row.createEl('td', { text:q.author });
-                authTd.style.cssText = 'padding:8px 10px;white-space:nowrap;color:var(--text-muted);';
+                authTd.style.cssText = 'padding:8px 10px;white-space:nowrap;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;';
 
-                const delTd = row.createEl('td'); delTd.style.cssText = 'padding:8px 10px;text-align:center;';
-                const delBtn = delTd.createEl('button', { text:'🗑' });
-                delBtn.style.cssText = 'padding:2px 8px;cursor:pointer;';
+                const actTd = row.createEl('td');
+                actTd.style.cssText = 'padding:4px 10px;text-align:center;white-space:nowrap;';
+
+                const editBtn = actTd.createEl('button', { text:'✏️' });
+                editBtn.title = 'تعديل';
+                editBtn.style.cssText = 'padding:2px 6px;cursor:pointer;margin-left:4px;';
+
+                const delBtn = actTd.createEl('button', { text:'🗑' });
+                delBtn.title = 'حذف';
+                delBtn.style.cssText = 'padding:2px 6px;cursor:pointer;';
+
+                // ── صف التعديل (مخفي بالبداية) ──
+                const editRow = tbody.createEl('tr');
+                editRow.style.cssText = 'display:none;background:var(--background-secondary);';
+                const editCell = editRow.createEl('td');
+                editCell.colSpan = 4;
+                editCell.style.cssText = 'padding:10px 12px;';
+                const editWrap = editCell.createDiv();
+                editWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+                const eText = editWrap.createEl('textarea');
+                eText.value = q.text;
+                eText.style.cssText = 'width:100%;height:60px;direction:rtl;resize:vertical;font-size:0.9em;padding:6px;border-radius:4px;border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);';
+                const eAuth = editWrap.createEl('input', { type:'text' });
+                eAuth.value = q.author;
+                eAuth.style.cssText = 'width:100%;direction:rtl;font-size:0.9em;padding:5px 8px;border-radius:4px;border:1px solid var(--background-modifier-border);background:var(--background-primary);color:var(--text-normal);';
+                const eBtns = editWrap.createDiv();
+                eBtns.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+                const eSave = eBtns.createEl('button', { text:'💾 حفظ' });
+                eSave.classList.add('mod-cta');
+                eSave.style.cssText = 'padding:4px 14px;cursor:pointer;font-size:0.85em;';
+                const eCancel = eBtns.createEl('button', { text:'إلغاء' });
+                eCancel.style.cssText = 'padding:4px 14px;cursor:pointer;font-size:0.85em;';
+
+                // منطق الأزرار
+                editBtn.onclick = () => {
+                    const isOpen = editRow.style.display !== 'none';
+                    editRow.style.display = isOpen ? 'none' : 'table-row';
+                    if (!isOpen) eText.focus();
+                };
+                eCancel.onclick = () => { editRow.style.display = 'none'; };
+                eSave.onclick = async () => {
+                    const newText = eText.value.trim();
+                    const newAuth = eAuth.value.trim() || 'مجهول';
+                    if (!newText) { new Notice('نص الحكمة لا يمكن أن يكون فارغاً'); return; }
+                    this.plugin.settings.quotes[idx] = { text: newText, author: newAuth };
+                    await this.plugin.saveSettings();
+                    new Notice('✅ تم تعديل الحكمة');
+                    if (this.plugin._activeView) this.plugin._activeView.updateQuoteDisplay(this.plugin.getCurrentQuote());
+                    this.display();
+                };
                 delBtn.onclick = async () => {
                     this.plugin.settings.quotes.splice(idx, 1);
                     if (this.plugin.settings.currentQuoteIdx >= this.plugin.settings.quotes.length)
                         this.plugin.settings.currentQuoteIdx = Math.max(0, this.plugin.settings.quotes.length-1);
                     await this.plugin.saveSettings();
                     new Notice('تم حذف الحكمة');
+                    if (this.plugin._activeView) this.plugin._activeView.updateQuoteDisplay(this.plugin.getCurrentQuote());
                     this.display();
                 };
             });
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        //  ٦. مجلد البيانات
+        //  ٦. الإشعارات
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        this._section(el, '🔔 الإشعارات');
+
+        new Setting(el)
+            .setName('تفعيل إشعارات Milestones')
+            .setDesc('إظهار إشعار عند الوصول إلى 25% — 50% — 75% — 100% من أي مهمة')
+            .addToggle(t => t
+                .setValue(this.plugin.settings.enableMilestoneNotifications)
+                .onChange(async v => {
+                    this.plugin.settings.enableMilestoneNotifications = v;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        if (this.plugin.settings.enableMilestoneNotifications) {
+            new Setting(el)
+                .setName('مصدر إشعارات Milestones')
+                .setDesc('حدد أين تود أن تظهر لك هذه الإشعارات؟')
+                .addDropdown(d => d
+                    .addOption('windows', 'ويندوز (النظام) فقط')
+                    .addOption('obsidian', 'أوبسيديان (داخلي) فقط')
+                    .addOption('both', 'كلاهما (ويندوز + أوبسيديان)')
+                    .setValue(this.plugin.settings.milestoneNotificationType)
+                    .onChange(async v => {
+                         this.plugin.settings.milestoneNotificationType = v;
+                         await this.plugin.saveSettings();
+                    }));
+
+            const msgsBox = el.createDiv();
+            msgsBox.style.cssText = 'display:flex;flex-direction:column;gap:12px;padding:12px;background:var(--background-secondary);border-radius:8px;margin-bottom:12px;margin-top:8px;';
+            msgsBox.createEl('span', { text: '💬 نصوص إشعارات الإنجاز المخصصة' }).style.cssText = 'color: var(--text-accent); font-weight: bold; margin-bottom: 4px; font-size: 1.05em;';
+            
+            const msgGrid = msgsBox.createDiv();
+            msgGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;';
+            
+            [25, 50, 75, 100].forEach(p => {
+                const item = msgGrid.createDiv();
+                item.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+                item.createEl('span', { text: `رسالة الإنجاز عند ${p}%` }).style.cssText = 'font-size: 0.9em; color: var(--text-normal); font-weight: 500;';
+                
+                const ta = item.createEl('textarea');
+                ta.value = this.plugin.settings.milestoneMessages[p];
+                ta.style.cssText = 'width: 100%; height: 75px; direction: rtl; resize: vertical; padding: 8px; border-radius: 6px; border: 1px solid var(--background-modifier-border); background: var(--background-primary); font-size: 0.9em;';
+                
+                ta.onchange = async () => {
+                    this.plugin.settings.milestoneMessages[p] = ta.value.trim() || DEFAULT_SETTINGS.milestoneMessages[p];
+                    if (!ta.value.trim()) ta.value = DEFAULT_SETTINGS.milestoneMessages[p];
+                    await this.plugin.saveSettings();
+                };
+            });
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  ٧. مجلد البيانات
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         this._section(el, '💾 مجلد البيانات');
         el.createDiv('omni-settings-note').innerHTML =
@@ -737,6 +1030,7 @@ class OmniSettingsTab extends PluginSettingTab {
                     new Notice(`✅ تم إضافة ${parsed.length} حكمة جديدة`);
                 }
                 await this.plugin.saveSettings();
+                if (this.plugin._activeView) this.plugin._activeView.updateQuoteDisplay(this.plugin.getCurrentQuote());
                 this.display();
             } catch (_) { new Notice('⚠️ خطأ في قراءة الملف'); }
         };
@@ -811,9 +1105,9 @@ class OmniNotePlugin extends Plugin {
     async _doNotifCheck() {
         const now     = Date.now();
         const windows = [
-            { key:'h24', ms:24*60*60*1000, label:'بعد 24 ساعة' },
-            { key:'h12', ms:12*60*60*1000, label:'بعد 12 ساعة' },
             { key:'h2',  ms: 2*60*60*1000, label:'بعد ساعتين'  },
+            { key:'h12', ms:12*60*60*1000, label:'بعد 12 ساعة' },
+            { key:'h24', ms:24*60*60*1000, label:'بعد 24 ساعة' },
         ];
         let dirty = false;
         for (const [ds, tasks] of Object.entries(this.settings.calendarTasks || {})) {
@@ -823,12 +1117,20 @@ class OmniNotePlugin extends Plugin {
                 const dueTs = new Date(yr, mo-1, dy, h, m).getTime();
                 const diff  = dueTs - now;
                 if (!task.notifsSent) task.notifsSent = {};
+                
+                let toNotify = null;
                 for (const w of windows) {
-                    if (!task.notifsSent[w.key] && diff>0 && diff<=w.ms) {
-                        sendNotif('📅 تذكير — OmniNote', `"${task.text}" مستحقة ${w.label}`);
-                        task.notifsSent[w.key] = true;
+                    if (diff > 0 && diff <= w.ms && !task.notifsSent[w.key]) {
+                        toNotify = w;
+                        for (const w2 of windows) {
+                            if (w2.ms >= w.ms) task.notifsSent[w2.key] = true;
+                        }
                         dirty = true;
+                        break;
                     }
+                }
+                if (toNotify) {
+                    sendNotif('📅 تذكير — OmniNote', `"${task.text}" مستحقة ${toNotify.label}`);
                 }
             }
         }
@@ -882,12 +1184,15 @@ class OmniNotePlugin extends Plugin {
                 ? await adapter.read(filePath)
                 : `# إحصائيات يوم ${today}\n`;
             let taskSummary = '| المهمة | الإنجاز | النسبة | الحالة |\n| :--- | :--- | :--- | :--- |\n';
-            this.settings.progressTasks.filter(t => !t.archived || t.archivedDate===today).forEach(t => {
-                const pct    = Math.min(100, Math.round((t.done/Math.max(t.total,1))*100));
-                const status = t.completed ? '✅ مكتملة' : '⏳ جارية';
-                taskSummary += `| ${escapeHTML(t.name)} | ${escapeHTML(String(t.done))}/${escapeHTML(String(t.total))} ${escapeHTML(t.unit)} | ${pct}% | ${status} |\n`;
+            this.settings.progressTasks.filter(t => !t.meta?.archived || t.meta?.archivedDate===today).forEach(t => {
+                const current = t.progress?.current ?? 0;
+                const total   = t.config?.total ?? 1;
+                const unit    = t.config?.unit ?? 'وحدة';
+                const pct     = Math.min(100, Math.round((current / Math.max(total, 1)) * 100));
+                const status  = t.meta?.completed ? '✅ مكتملة' : '⏳ جارية';
+                taskSummary  += `| ${escapeHTML(t.name)} | ${escapeHTML(String(current))}/${escapeHTML(String(total))} ${escapeHTML(unit)} | ${pct}% | ${status} |\n`;
             });
-            const timeStr  = new Date().toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' });
+            const timeStr     = new Date().toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' });
             const fullSection = `## متابعة الإنجاز (تحديث: ${timeStr})\n\n${taskSummary}\n`;
             const progressRegex = /## متابعة الإنجاز(?:.*\n)+?(?=\n## |\Z)/;
             content = progressRegex.test(content)
@@ -913,6 +1218,72 @@ class OmniNotePlugin extends Plugin {
         if (!Array.isArray(this.settings.quotes)||!this.settings.quotes.length)
             this.settings.quotes = DEFAULT_SETTINGS.quotes;
         if (typeof this.settings.currentQuoteIdx !== 'number') this.settings.currentQuoteIdx = 0;
+        if (typeof this.settings.enableMilestoneNotifications !== 'boolean')
+            this.settings.enableMilestoneNotifications = true;
+        if (!this.settings.milestoneNotificationType) this.settings.milestoneNotificationType = 'windows';
+        if (!this.settings.milestoneMessages) this.settings.milestoneMessages = DEFAULT_SETTINGS.milestoneMessages;
+
+        // ═══ Migration: تحويل Schema القديم إلى الجديد ═══
+        this.settings.progressTasks = this.settings.progressTasks.map(t => {
+            if (t.type) return t; // already migrated
+            return {
+                id   : t.id,
+                name : t.name,
+                type : 'steps',
+                config: {
+                    total : t.total  ?? 1,
+                    unit  : t.unit   || 'وحدة',
+                },
+                progress: {
+                    current : t.done || 0,
+                    history : [],
+                },
+                meta: {
+                    completed   : t.completed  || false,
+                    archived    : t.archived   || false,
+                    createdAt   : t.createdAt  || fmtDate(new Date()),
+                    completedAt : null,
+                    milestones  : {},
+                },
+            };
+        });
+    }
+
+    /** فحص وإطلاق إشعارات Milestones */
+    _checkMilestones(t) {
+        if (!this.settings.enableMilestoneNotifications) return;
+        const pct = Math.round((t.progress.current / Math.max(t.config.total, 1)) * 100);
+        if (!t.meta.milestones) t.meta.milestones = {};
+        const msgs = this.settings.milestoneMessages || DEFAULT_SETTINGS.milestoneMessages;
+        let highest = 0;
+        [25, 50, 75, 100].forEach(m => {
+            if (pct >= m && !t.meta.milestones[m]) {
+                t.meta.milestones[m] = true;
+                highest = m;
+            }
+        });
+        if (highest > 0) {
+            const notifType = this.settings.milestoneNotificationType || 'windows';
+            const title = `📊 OmniNote — ${t.name} (${highest}%)`;
+            const body = msgs[highest] || `وصلت إلى ${highest}%`;
+            
+            try {
+                if (notifType === 'obsidian' || notifType === 'both') {
+                    new Notice(`${title}\n${body}`, 8000);
+                }
+                if (notifType === 'windows' || notifType === 'both') {
+                    if (typeof Notification !== 'undefined') {
+                        if (Notification.permission === 'granted') {
+                            new Notification(title, { body: body });
+                        } else if (Notification.permission !== 'denied') {
+                            Notification.requestPermission().then(p => {
+                                if (p === 'granted') new Notification(title, { body });
+                            });
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
     }
 
     async saveSettings() { await this.saveData(this.settings); }

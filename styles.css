@@ -189,26 +189,50 @@
   font-family: "JetBrains Mono","Courier New",monospace;
 }
 
-.omni-pomo-btns {
+/* حاوي مركزي يضمن تعامد الأزرار والإعدادات والجلسات */
+.omni-pomo-center {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.omni-pomo-btns {
+  display: grid;
+  grid-template-columns: auto auto auto;
   justify-content: center;
   gap: 7px;
-  flex-wrap: wrap;
+}
+/* تخطي تحت توقف بالضبط */
+.omni-pomo-btns > :nth-child(4) {
+  grid-column: 2;
 }
 
 .omni-dur-row {
   display: flex;
-  justify-content: center;
-  gap: 14px;
-  margin-top: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 .omni-dur-lbl {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   font-size: .78em;
   color: var(--text-muted);
+}
+/* توحيد العرض لضمان تعامد العداد في المنتصف تماماً */
+.omni-dur-lbl > span:first-child,
+.omni-dur-lbl > span:last-child {
+  width: 50px;
+  display: inline-block;
+}
+.omni-dur-lbl > span:first-child {
+  text-align: left; /* اتجاه اليمين عشان يقرب للعداد */
+}
+.omni-dur-lbl > span:last-child {
+  text-align: right; /* عشان يقرب للعداد */
 }
 .omni-dur-inp {
   width: 40px;
@@ -319,38 +343,36 @@
   border-radius: 50%;
 }
 
-/* Note/task indicator dot */
-.omni-dc.omni-has-note::after {
-  content: '';
+/* \u0636\u063a\u0637\u0629 \u0648\u0627\u062d\u062f\u0629 — \u062a\u0645\u064a\u064a\u0632 \u062e\u0641\u064a\u0641 \u0642\u0628\u0644 \u0641\u062a\u062d \u0627\u0644\u0644\u0648\u062d */
+.omni-dc.omni-dc-peek {
+  background: var(--background-modifier-hover);
+  outline: 1px dashed var(--interactive-accent);
+  outline-offset: 1px;
+  border-radius: 7px;
+}
+
+/* Calendar Dots container & items for task/note indication */
+.omni-dots-wrap {
   position: absolute;
   bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  padding: 0 4px;
+}
+.omni-dc-dot {
   width: 4px;
   height: 4px;
   border-radius: 50%;
   background: var(--text-normal);
-  pointer-events: none;
+  transition: background .12s;
 }
-.omni-dc.omni-today.omni-has-note::after { background: var(--text-on-accent); }
-
-/* Task count badge on date cell */
-.omni-task-badge {
-  position: absolute;
-  top: 1px;
-  left: 2px;
-  font-size: .58em;
-  font-weight: 700;
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-radius: 6px;
-  padding: 0 3px;
-  line-height: 1.5;
-  pointer-events: none;
-}
-.omni-today .omni-task-badge {
-  background: var(--text-on-accent);
-  color: var(--interactive-accent);
+.omni-dc.omni-today .omni-dc-dot { 
+  background: var(--text-on-accent); 
 }
 
 /* ── Sticky panel ─────────────────────────────────────── */
@@ -423,7 +445,7 @@
   color: var(--text-accent);
   font-weight: 700;
   font-size: .9em;
-  min-width: 34px;
+  min-width: 52px;
   direction: ltr;
 }
 .omni-ctask-text { flex: 1; color: var(--text-normal); }
